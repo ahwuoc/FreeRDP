@@ -6,7 +6,7 @@ on:
 jobs:
   secure-rdp:
     runs-on: windows-latest
-    timeout-minutes: 360 # 6 tiếng
+    timeout-minutes: 360 # ~6 tiếng
 
     steps:
       - name: Configure Core RDP Settings
@@ -17,9 +17,8 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 0 -Force
 
           # Open firewall port 3389
-          netsh advfirewall firewall delete rule name="RDP-Tailscale"
+          netsh advfirewall firewall delete rule name="RDP-Tailscale" > $null 2>&1
           netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
-
           Restart-Service -Name TermService -Force
 
       - name: Create RDP User with Secure Password
@@ -43,16 +42,17 @@ jobs:
 
       - name: Establish Tailscale Connection
         run: |
-          # 👉 DÙNG authkey để auto login (tạo trong https://login.tailscale.com/admin/settings/keys)
-          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-runner-$env:GITHUB_RUN_ID
+          Write-Host "🔗 Starting Tailscale manual login..."
+          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --hostname=gh-runner-$env:GITHUB_RUN_ID
           
-          # Nếu muốn login thủ công (hiện link) thì dùng dòng này thay vì dòng trên:
-          # & "$env:ProgramFiles\Tailscale\tailscale.exe" up --hostname=gh-runner-$env:GITHUB_RUN_ID
+          Write-Host "`n👉 Copy the login URL above and open it in your browser to authenticate!"
+          Write-Host "Waiting for authentication..."
+          Start-Sleep -Seconds 10
 
           # Wait for Tailscale IP
           $tsIP = $null
           $retries = 0
-          while (-not $tsIP -and $retries -lt 10) {
+          while (-not $tsIP -and $retries -lt 20) {
               $tsIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
               Start-Sleep -Seconds 5
               $retries++
@@ -84,6 +84,5 @@ jobs:
           Write-Host "==============================`n"
 
           while ($true) {
-              Write-Host "[$(Get-Date)] RDP still running..."
+              Write-Host "[$(Get-Date)] 🟢 RDP still running..."
               Start-Sleep -Seconds 300
-          }
